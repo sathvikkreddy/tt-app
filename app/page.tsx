@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Settings } from "lucide-react"
+import { Settings, Wifi, WifiOff } from "lucide-react"
 import Link from "next/link"
 import { getGameState } from "@/lib/game-state"
+import { useSSE } from "@/hooks/use-sse"
 
 interface Match {
   id: number
@@ -25,33 +25,9 @@ interface Match {
 }
 
 export default function ScoreViewer() {
-  const [match, setMatch] = useState<Match | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { match, isConnected, isLoading } = useSSE()
 
-  const fetchMatch = async () => {
-    try {
-      const response = await fetch("/api/match")
-      if (response.ok) {
-        const data = await response.json()
-        setMatch(data.match)
-      }
-    } catch (error) {
-      console.error("Failed to fetch match:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchMatch()
-
-    // Poll every 5 seconds
-    const interval = setInterval(fetchMatch, 5000)
-
-    return () => clearInterval(interval)
-  }, [])
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
         <div className="text-lg">Loading match...</div>
@@ -83,12 +59,28 @@ export default function ScoreViewer() {
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Table Tennis Score</h1>
-          <Link href="/admin">
-            <Button variant="outline" size="sm">
-              <Settings className="w-4 h-4 mr-2" />
-              Admin
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {/* Connection status indicator */}
+            <div className="flex items-center gap-1 text-sm">
+              {isConnected ? (
+                <>
+                  <Wifi className="w-4 h-4 text-green-600" />
+                  <span className="text-green-600">Live</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-4 h-4 text-red-600" />
+                  <span className="text-red-600">Disconnected</span>
+                </>
+              )}
+            </div>
+            <Link href="/admin">
+              <Button variant="outline" size="sm">
+                <Settings className="w-4 h-4 mr-2" />
+                Admin
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <Card className="mb-4">

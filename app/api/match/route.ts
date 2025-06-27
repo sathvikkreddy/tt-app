@@ -1,6 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSql } from "@/lib/db"
 
+// Import the broadcast function
+async function broadcastMatchUpdate(match: any) {
+  try {
+    const { broadcastMatchUpdate: broadcast } = await import("../events/route")
+    broadcast(match)
+  } catch (error) {
+    console.error("Error broadcasting match update:", error)
+  }
+}
+
 export async function GET() {
   const sql = await getSql()
   try {
@@ -62,6 +72,10 @@ export async function POST(request: NextRequest) {
     `
 
     const match = result[0]
+
+    // Broadcast the new match to all connected clients
+    await broadcastMatchUpdate(match)
+
     return NextResponse.json({ match })
   } catch (error) {
     console.error("Database error:", error)

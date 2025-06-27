@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { Plus, Minus, Eye, RotateCcw } from "lucide-react"
 import Link from "next/link"
 import { getGameState } from "@/lib/game-state"
+import { useSSE } from "@/hooks/use-sse"
 
 interface Match {
   id: number
@@ -29,6 +30,7 @@ interface Match {
 }
 
 export default function AdminPanel() {
+  const { match: sseMatch, isConnected } = useSSE()
   const [match, setMatch] = useState<Match | null>(null)
   const [matchType, setMatchType] = useState<"singles" | "doubles">("singles")
   const [player1, setPlayer1] = useState("")
@@ -38,23 +40,11 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true)
   const [pointsToWin, setPointsToWin] = useState<11 | 21>(11)
 
-  const fetchMatch = async () => {
-    try {
-      const response = await fetch("/api/match")
-      if (response.ok) {
-        const data = await response.json()
-        setMatch(data.match)
-      }
-    } catch (error) {
-      console.error("Failed to fetch match:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Update local match state when SSE provides updates
   useEffect(() => {
-    fetchMatch()
-  }, [])
+    setMatch(sseMatch)
+    setLoading(false)
+  }, [sseMatch])
 
   const createMatch = async () => {
     try {

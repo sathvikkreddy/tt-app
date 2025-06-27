@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server"
 import { getSql } from "@/lib/db"
 
+// Import the broadcast function
+async function broadcastMatchUpdate(match: any) {
+  try {
+    const { broadcastMatchUpdate: broadcast } = await import("../../events/route")
+    broadcast(match)
+  } catch (error) {
+    console.error("Error broadcasting match update:", error)
+  }
+}
+
 export async function POST() {
   const sql = await getSql()
   try {
@@ -29,6 +39,9 @@ export async function POST() {
     if (updatedResult.length === 0) {
       return NextResponse.json({ error: "Failed to reset match" }, { status: 400 })
     }
+
+    // Broadcast the update to all connected clients
+    await broadcastMatchUpdate(updatedResult[0])
 
     return NextResponse.json({ match: updatedResult[0] })
   } catch (error) {
