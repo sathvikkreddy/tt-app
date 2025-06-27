@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Plus, Minus, Eye, RotateCcw } from "lucide-react"
 import Link from "next/link"
+import { getGameState } from "@/lib/game-state"
 
 interface Match {
   id: number
@@ -150,17 +151,6 @@ export default function AdminPanel() {
     }
   }
 
-  const checkWinCondition = (score1: number, score2: number, pointsToWin: number) => {
-    const minScore = Math.min(score1, score2)
-    const maxScore = Math.max(score1, score2)
-
-    // Must reach winning score and have at least 2 point difference
-    if (maxScore >= pointsToWin && maxScore - minScore >= 2) {
-      return score1 > score2 ? 1 : 2
-    }
-    return null
-  }
-
   const confirmWin = async (winner: number) => {
     try {
       const response = await fetch("/api/match/win", {
@@ -218,14 +208,22 @@ export default function AdminPanel() {
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const winner = checkWinCondition(match.score1, match.score2, match.points_to_win)
+                  const gameState = getGameState(match.score1, match.score2, match.points_to_win)
                   return (
                     <>
-                      {winner && (
+                      {/* Game State Display */}
+                      {gameState.type === "deuce" && (
+                        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+                          <h3 className="text-xl font-bold text-yellow-800">⚡ DEUCE ⚡</h3>
+                          <p className="text-sm text-yellow-700 mt-1">Next point wins or advantage</p>
+                        </div>
+                      )}
+
+                      {gameState.type === "win" && (
                         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
                           <h3 className="text-lg font-semibold text-green-800 mb-2">
                             🏆{" "}
-                            {winner === 1
+                            {gameState.winner === 1
                               ? match.type === "singles"
                                 ? "Player 1"
                                 : "Team 1"
@@ -234,7 +232,10 @@ export default function AdminPanel() {
                                 : "Team 2"}{" "}
                             Wins!
                           </h3>
-                          <Button onClick={() => confirmWin(winner)} className="bg-green-600 hover:bg-green-700">
+                          <Button
+                            onClick={() => confirmWin(gameState.winner!)}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
                             Confirm Win & End Match
                           </Button>
                         </div>
@@ -243,11 +244,23 @@ export default function AdminPanel() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Team 1 Controls */}
                         <div
-                          className={`text-center space-y-4 ${winner === 1 ? "bg-green-50 p-4 rounded-lg border-2 border-green-200" : ""}`}
+                          className={`text-center space-y-4 ${
+                            gameState.type === "win" && gameState.winner === 1
+                              ? "bg-green-50 p-4 rounded-lg border-2 border-green-200"
+                              : ""
+                          }`}
                         >
                           <h3 className="text-lg font-semibold text-blue-600">
                             {match.type === "singles" ? "Player 1" : "Team 1"}
                           </h3>
+
+                          {/* Advantage indicator for Team 1 */}
+                          {gameState.type === "advantage" && gameState.advantageTeam === 1 && (
+                            <div className="bg-blue-100 border border-blue-300 rounded-md p-2 mb-2">
+                              <span className="text-sm font-semibold text-blue-800">🔥 ADVANTAGE</span>
+                            </div>
+                          )}
+
                           <div className="space-y-1">
                             <div className="font-medium">{match.player1}</div>
                             {match.type === "doubles" && match.player3 && (
@@ -260,11 +273,11 @@ export default function AdminPanel() {
                               variant="outline"
                               size="sm"
                               onClick={() => updateScore(1, false)}
-                              disabled={match.score1 <= 0 || winner !== null}
+                              disabled={match.score1 <= 0 || gameState.type === "win"}
                             >
                               <Minus className="w-4 h-4" />
                             </Button>
-                            <Button size="sm" onClick={() => updateScore(1, true)} disabled={winner !== null}>
+                            <Button size="sm" onClick={() => updateScore(1, true)} disabled={gameState.type === "win"}>
                               <Plus className="w-4 h-4" />
                             </Button>
                           </div>
@@ -272,11 +285,23 @@ export default function AdminPanel() {
 
                         {/* Team 2 Controls */}
                         <div
-                          className={`text-center space-y-4 ${winner === 2 ? "bg-green-50 p-4 rounded-lg border-2 border-green-200" : ""}`}
+                          className={`text-center space-y-4 ${
+                            gameState.type === "win" && gameState.winner === 2
+                              ? "bg-green-50 p-4 rounded-lg border-2 border-green-200"
+                              : ""
+                          }`}
                         >
                           <h3 className="text-lg font-semibold text-green-600">
                             {match.type === "singles" ? "Player 2" : "Team 2"}
                           </h3>
+
+                          {/* Advantage indicator for Team 2 */}
+                          {gameState.type === "advantage" && gameState.advantageTeam === 2 && (
+                            <div className="bg-green-100 border border-green-300 rounded-md p-2 mb-2">
+                              <span className="text-sm font-semibold text-green-800">🔥 ADVANTAGE</span>
+                            </div>
+                          )}
+
                           <div className="space-y-1">
                             <div className="font-medium">{match.player2}</div>
                             {match.type === "doubles" && match.player4 && (
@@ -289,11 +314,11 @@ export default function AdminPanel() {
                               variant="outline"
                               size="sm"
                               onClick={() => updateScore(2, false)}
-                              disabled={match.score2 <= 0 || winner !== null}
+                              disabled={match.score2 <= 0 || gameState.type === "win"}
                             >
                               <Minus className="w-4 h-4" />
                             </Button>
-                            <Button size="sm" onClick={() => updateScore(2, true)} disabled={winner !== null}>
+                            <Button size="sm" onClick={() => updateScore(2, true)} disabled={gameState.type === "win"}>
                               <Plus className="w-4 h-4" />
                             </Button>
                           </div>
@@ -303,7 +328,7 @@ export default function AdminPanel() {
                       <Separator className="my-6" />
 
                       <div className="flex justify-center gap-4">
-                        <Button variant="outline" onClick={resetMatch} disabled={winner !== null}>
+                        <Button variant="outline" onClick={resetMatch} disabled={gameState.type === "win"}>
                           <RotateCcw className="w-4 h-4 mr-2" />
                           Reset Scores
                         </Button>
@@ -318,7 +343,7 @@ export default function AdminPanel() {
             </Card>
           </div>
         ) : (
-          /* New Match Form - add the points selection here */
+          /* New Match Form */
           <Card>
             <CardHeader>
               <CardTitle>Start New Match</CardTitle>
