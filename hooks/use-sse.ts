@@ -34,14 +34,21 @@ export function useSSE() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>()
   const reconnectAttempts = useRef(0)
   const maxReconnectAttempts = 5
+  const isConnectingRef = useRef(false)
 
   const connect = useCallback(() => {
+    // Prevent multiple simultaneous connection attempts
+    if (isConnectingRef.current) {
+      return
+    }
+
     try {
       // Close existing connection if any
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
       }
 
+      isConnectingRef.current = true
       console.log("Connecting to SSE...")
       eventSourceRef.current = new EventSource("/api/events")
 
@@ -50,6 +57,7 @@ export function useSSE() {
         setIsConnected(true)
         setIsLoading(false)
         reconnectAttempts.current = 0
+        isConnectingRef.current = false
       }
 
       eventSourceRef.current.onmessage = (event) => {
@@ -61,34 +69,42 @@ export function useSSE() {
             setIsLoading(false)
           } else if (message.type === "connected") {
             console.log("SSE connection confirmed")
-          } else if (message.type === "heartbeat") {
-            // Keep connection alive
           }
         } catch (error) {
           console.error("Error parsing SSE message:", error)
         }
       }
 
-      // Chrome fires “error” every time the stream is reset. Treat first
-      // error as a reconnect signal, NOT as a fatal error.
-      eventSourceRef.current.onerror = () => {
-        if (eventSourceRef.current?.readyState === 0) {
-          // CLOSED – trigger reconnect
+      eventSourceRef.current.onerror = (error) => {
+        console.log("SSE error occurred:", error)
+        isConnectingRef.current = false
+
+        if (eventSourceRef.current?.readyState === EventSource.CLOSED) {
           setIsConnected(false)
+
+          // Only attempt reconnect if we haven't exceeded max attempts
           if (reconnectAttempts.current < maxReconnectAttempts) {
-            const delay = 1000 * (reconnectAttempts.current + 1)
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000)
+            console.log(
+              `Attempting reconnect in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`,
+            )
+
             reconnectTimeoutRef.current = setTimeout(() => {
               reconnectAttempts.current++
               connect()
             }, delay)
           } else {
+            console.log("Max reconnection attempts reached, falling back to fetch")
             setIsLoading(false)
+            fetchCurrentMatch()
           }
         }
       }
     } catch (error) {
       console.error("Error creating SSE connection:", error)
+      isConnectingRef.current = false
       setIsLoading(false)
+      fetchCurrentMatch()
     }
   }, [])
 
@@ -126,6 +142,7 @@ export function useSSE() {
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
       }
+      isConnectingRef.current = false
     }
   }, [connect, isConnected, isLoading, fetchCurrentMatch])
 

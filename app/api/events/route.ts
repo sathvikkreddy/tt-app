@@ -16,15 +16,26 @@ export async function GET(request: NextRequest) {
       // Initial connection message
       controller.enqueue(`data: ${JSON.stringify({ type: "connected" })}\n\n`)
 
-      // Send current match data to newly connected client
-      sendCurrentMatch(controller)
+      // Send current match data after a small delay to ensure connection is stable
+      setTimeout(() => {
+        if (clients.has(controller)) {
+          sendCurrentMatch(controller)
+        }
+      }, 100)
 
       // Keep connection alive with periodic heartbeat
       const heartbeat = setInterval(() => {
         try {
-          // “:” = comment → ignored by browser but keeps the stream alive
+          // Check if controller is still open
+          if (!controller.desiredSize && controller.desiredSize !== 0) {
+            clearInterval(heartbeat)
+            clients.delete(controller)
+            return
+          }
+          // ":" = comment → ignored by browser but keeps the stream alive
           controller.enqueue(`:\n`)
-        } catch {
+        } catch (error) {
+          console.log("Heartbeat failed, cleaning up:", error.message)
           clearInterval(heartbeat)
           clients.delete(controller)
         }
@@ -73,6 +84,12 @@ export async function OPTIONS() {
 
 async function sendCurrentMatch(controller: ReadableStreamDefaultController) {
   try {
+    // Check if controller is still open before sending
+    if (!controller.desiredSize && controller.desiredSize !== 0) {
+      console.log("Controller is closed, skipping send")
+      return
+    }
+
     const sql = await getSql()
     const result = await sql`
       SELECT * FROM matches 
@@ -87,7 +104,14 @@ async function sendCurrentMatch(controller: ReadableStreamDefaultController) {
       data: { match },
     })
 
-    controller.enqueue(`data: ${data}\n\n`)
+    // Double-check controller is still open before enqueuing
+    try {
+      controller.enqueue(`data: ${data}\n\n`)
+    } catch (enqueueError) {
+      console.log("Failed to enqueue data, controller likely closed:", enqueueError.message)
+      // Remove this controller from clients set
+      clients.delete(controller)
+    }
   } catch (error) {
     console.error("Error sending current match:", error)
   }
@@ -103,11 +127,20 @@ export function broadcastMatchUpdate(match: any) {
 
   console.log(`Broadcasting to ${clients.size} clients:`, { match: match?.id || "null" })
 
-  clients.forEach((controller) => {
+  // Create array from clients to avoid modification during iteration
+  const clientsArray = Array.from(clients)
+
+  clientsArray.forEach((controller) => {
     try {
+      // Check if controller is still open
+      if (!controller.desiredSize && controller.desiredSize !== 0) {
+        clients.delete(controller)
+        return
+      }
+
       controller.enqueue(message)
     } catch (error) {
-      console.error("Error sending to client:", error)
+      console.error("Error sending to client:", error.message)
       clients.delete(controller)
     }
   })
