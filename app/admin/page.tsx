@@ -20,6 +20,8 @@ interface Match {
   player4?: string
   score1: number
   score2: number
+  points_to_win: number
+  winner?: number
   is_active: boolean
   created_at: string
   updated_at: string
@@ -33,6 +35,7 @@ export default function AdminPanel() {
   const [player3, setPlayer3] = useState("")
   const [player4, setPlayer4] = useState("")
   const [loading, setLoading] = useState(true)
+  const [pointsToWin, setPointsToWin] = useState<11 | 21>(11)
 
   const fetchMatch = async () => {
     try {
@@ -65,6 +68,7 @@ export default function AdminPanel() {
           player2,
           player3: matchType === "doubles" ? player3 : undefined,
           player4: matchType === "doubles" ? player4 : undefined,
+          points_to_win: pointsToWin,
         }),
       })
 
@@ -77,6 +81,7 @@ export default function AdminPanel() {
         setPlayer2("")
         setPlayer3("")
         setPlayer4("")
+        setPointsToWin(11)
       } else {
         // Show error message
         alert(data.error || "Failed to create match")
@@ -145,6 +150,36 @@ export default function AdminPanel() {
     }
   }
 
+  const checkWinCondition = (score1: number, score2: number, pointsToWin: number) => {
+    const minScore = Math.min(score1, score2)
+    const maxScore = Math.max(score1, score2)
+
+    // Must reach winning score and have at least 2 point difference
+    if (maxScore >= pointsToWin && maxScore - minScore >= 2) {
+      return score1 > score2 ? 1 : 2
+    }
+    return null
+  }
+
+  const confirmWin = async (winner: number) => {
+    try {
+      const response = await fetch("/api/match/win", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ winner }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setMatch(data.match)
+      }
+    } catch (error) {
+      console.error("Failed to confirm win:", error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -173,78 +208,117 @@ export default function AdminPanel() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Current Match</CardTitle>
-                  <Badge variant={match.type === "singles" ? "default" : "secondary"}>{match.type.toUpperCase()}</Badge>
+                  <div className="flex gap-2">
+                    <Badge variant={match.type === "singles" ? "default" : "secondary"}>
+                      {match.type.toUpperCase()}
+                    </Badge>
+                    <Badge variant="outline">First to {match.points_to_win}</Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Team 1 Controls */}
-                  <div className="text-center space-y-4">
-                    <h3 className="text-lg font-semibold text-blue-600">
-                      {match.type === "singles" ? "Player 1" : "Team 1"}
-                    </h3>
-                    <div className="space-y-1">
-                      <div className="font-medium">{match.player1}</div>
-                      {match.type === "doubles" && match.player3 && <div className="font-medium">{match.player3}</div>}
-                    </div>
-                    <div className="text-4xl font-bold text-blue-600 mb-4">{match.score1}</div>
-                    <div className="flex justify-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateScore(1, false)}
-                        disabled={match.score1 <= 0}
-                      >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <Button size="sm" onClick={() => updateScore(1, true)}>
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
+                {(() => {
+                  const winner = checkWinCondition(match.score1, match.score2, match.points_to_win)
+                  return (
+                    <>
+                      {winner && (
+                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+                          <h3 className="text-lg font-semibold text-green-800 mb-2">
+                            🏆{" "}
+                            {winner === 1
+                              ? match.type === "singles"
+                                ? "Player 1"
+                                : "Team 1"
+                              : match.type === "singles"
+                                ? "Player 2"
+                                : "Team 2"}{" "}
+                            Wins!
+                          </h3>
+                          <Button onClick={() => confirmWin(winner)} className="bg-green-600 hover:bg-green-700">
+                            Confirm Win & End Match
+                          </Button>
+                        </div>
+                      )}
 
-                  {/* Team 2 Controls */}
-                  <div className="text-center space-y-4">
-                    <h3 className="text-lg font-semibold text-green-600">
-                      {match.type === "singles" ? "Player 2" : "Team 2"}
-                    </h3>
-                    <div className="space-y-1">
-                      <div className="font-medium">{match.player2}</div>
-                      {match.type === "doubles" && match.player4 && <div className="font-medium">{match.player4}</div>}
-                    </div>
-                    <div className="text-4xl font-bold text-green-600 mb-4">{match.score2}</div>
-                    <div className="flex justify-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateScore(2, false)}
-                        disabled={match.score2 <= 0}
-                      >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <Button size="sm" onClick={() => updateScore(2, true)}>
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Team 1 Controls */}
+                        <div
+                          className={`text-center space-y-4 ${winner === 1 ? "bg-green-50 p-4 rounded-lg border-2 border-green-200" : ""}`}
+                        >
+                          <h3 className="text-lg font-semibold text-blue-600">
+                            {match.type === "singles" ? "Player 1" : "Team 1"}
+                          </h3>
+                          <div className="space-y-1">
+                            <div className="font-medium">{match.player1}</div>
+                            {match.type === "doubles" && match.player3 && (
+                              <div className="font-medium">{match.player3}</div>
+                            )}
+                          </div>
+                          <div className="text-4xl font-bold text-blue-600 mb-4">{match.score1}</div>
+                          <div className="flex justify-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateScore(1, false)}
+                              disabled={match.score1 <= 0 || winner !== null}
+                            >
+                              <Minus className="w-4 h-4" />
+                            </Button>
+                            <Button size="sm" onClick={() => updateScore(1, true)} disabled={winner !== null}>
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
 
-                <Separator className="my-6" />
+                        {/* Team 2 Controls */}
+                        <div
+                          className={`text-center space-y-4 ${winner === 2 ? "bg-green-50 p-4 rounded-lg border-2 border-green-200" : ""}`}
+                        >
+                          <h3 className="text-lg font-semibold text-green-600">
+                            {match.type === "singles" ? "Player 2" : "Team 2"}
+                          </h3>
+                          <div className="space-y-1">
+                            <div className="font-medium">{match.player2}</div>
+                            {match.type === "doubles" && match.player4 && (
+                              <div className="font-medium">{match.player4}</div>
+                            )}
+                          </div>
+                          <div className="text-4xl font-bold text-green-600 mb-4">{match.score2}</div>
+                          <div className="flex justify-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateScore(2, false)}
+                              disabled={match.score2 <= 0 || winner !== null}
+                            >
+                              <Minus className="w-4 h-4" />
+                            </Button>
+                            <Button size="sm" onClick={() => updateScore(2, true)} disabled={winner !== null}>
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
 
-                <div className="flex justify-center gap-4">
-                  <Button variant="outline" onClick={resetMatch}>
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Reset Scores
-                  </Button>
-                  <Button variant="destructive" onClick={endMatch}>
-                    End Match
-                  </Button>
-                </div>
+                      <Separator className="my-6" />
+
+                      <div className="flex justify-center gap-4">
+                        <Button variant="outline" onClick={resetMatch} disabled={winner !== null}>
+                          <RotateCcw className="w-4 h-4 mr-2" />
+                          Reset Scores
+                        </Button>
+                        <Button variant="destructive" onClick={endMatch}>
+                          End Match
+                        </Button>
+                      </div>
+                    </>
+                  )
+                })()}
               </CardContent>
             </Card>
           </div>
         ) : (
-          /* New Match Form */
+          /* New Match Form - add the points selection here */
           <Card>
             <CardHeader>
               <CardTitle>Start New Match</CardTitle>
@@ -316,6 +390,24 @@ export default function AdminPanel() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div>
+                <Label className="text-base font-medium">Points to Win</Label>
+                <RadioGroup
+                  value={pointsToWin.toString()}
+                  onValueChange={(value: "11" | "21") => setPointsToWin(Number.parseInt(value) as 11 | 21)}
+                  className="mt-2"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="11" id="points-11" />
+                    <Label htmlFor="points-11">11 Points</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="21" id="points-21" />
+                    <Label htmlFor="points-21">21 Points</Label>
+                  </div>
+                </RadioGroup>
               </div>
 
               <Button

@@ -16,9 +16,21 @@ interface Match {
   player4?: string
   score1: number
   score2: number
+  points_to_win: number
+  winner?: number
   is_active: boolean
   created_at: string
   updated_at: string
+}
+
+const checkWinCondition = (score1: number, score2: number, pointsToWin: number) => {
+  const minScore = Math.min(score1, score2)
+  const maxScore = Math.max(score1, score2)
+
+  if (maxScore >= pointsToWin && maxScore - minScore >= 2) {
+    return score1 > score2 ? 1 : 2
+  }
+  return null
 }
 
 export default function ScoreViewer() {
@@ -90,49 +102,78 @@ export default function ScoreViewer() {
 
         <Card className="mb-4">
           <CardHeader className="text-center">
-            <div className="flex justify-center mb-2">
+            <div className="flex justify-center mb-2 gap-2">
               <Badge variant={match.type === "singles" ? "default" : "secondary"}>{match.type.toUpperCase()}</Badge>
+              <Badge variant="outline">First to {match.points_to_win}</Badge>
             </div>
-            <CardTitle className="text-2xl">Live Match</CardTitle>
+            <CardTitle className="text-2xl">
+              {(() => {
+                const winner = checkWinCondition(match.score1, match.score2, match.points_to_win)
+                return winner ? (
+                  <span className="text-green-600">
+                    🏆{" "}
+                    {winner === 1
+                      ? match.type === "singles"
+                        ? "Player 1"
+                        : "Team 1"
+                      : match.type === "singles"
+                        ? "Player 2"
+                        : "Team 2"}{" "}
+                    Wins!
+                  </span>
+                ) : (
+                  "Live Match"
+                )
+              })()}
+            </CardTitle>
           </CardHeader>
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Team 1 */}
-          <Card className="text-center">
-            <CardHeader>
-              <CardTitle className="text-lg text-blue-600">
-                {match.type === "singles" ? "Player 1" : "Team 1"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 mb-4">
-                <div className="font-semibold text-lg">{match.player1}</div>
-                {match.type === "doubles" && match.player3 && (
-                  <div className="font-semibold text-lg">{match.player3}</div>
-                )}
-              </div>
-              <div className="text-6xl font-bold text-blue-600 mb-2">{match.score1}</div>
-            </CardContent>
-          </Card>
+          {(() => {
+            const winner = checkWinCondition(match.score1, match.score2, match.points_to_win)
+            return (
+              <>
+                {/* Team 1 */}
+                <Card className={`text-center ${winner === 1 ? "bg-green-50 border-green-200 border-2" : ""}`}>
+                  <CardHeader>
+                    <CardTitle className="text-lg text-blue-600">
+                      {match.type === "singles" ? "Player 1" : "Team 1"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 mb-4">
+                      <div className="font-semibold text-lg">{match.player1}</div>
+                      {match.type === "doubles" && match.player3 && (
+                        <div className="font-semibold text-lg">{match.player3}</div>
+                      )}
+                    </div>
+                    <div className="text-6xl font-bold text-blue-600 mb-2">{match.score1}</div>
+                    {winner === 1 && <div className="text-2xl">🏆</div>}
+                  </CardContent>
+                </Card>
 
-          {/* Team 2 */}
-          <Card className="text-center">
-            <CardHeader>
-              <CardTitle className="text-lg text-green-600">
-                {match.type === "singles" ? "Player 2" : "Team 2"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 mb-4">
-                <div className="font-semibold text-lg">{match.player2}</div>
-                {match.type === "doubles" && match.player4 && (
-                  <div className="font-semibold text-lg">{match.player4}</div>
-                )}
-              </div>
-              <div className="text-6xl font-bold text-green-600 mb-2">{match.score2}</div>
-            </CardContent>
-          </Card>
+                {/* Team 2 */}
+                <Card className={`text-center ${winner === 2 ? "bg-green-50 border-green-200 border-2" : ""}`}>
+                  <CardHeader>
+                    <CardTitle className="text-lg text-green-600">
+                      {match.type === "singles" ? "Player 2" : "Team 2"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 mb-4">
+                      <div className="font-semibold text-lg">{match.player2}</div>
+                      {match.type === "doubles" && match.player4 && (
+                        <div className="font-semibold text-lg">{match.player4}</div>
+                      )}
+                    </div>
+                    <div className="text-6xl font-bold text-green-600 mb-2">{match.score2}</div>
+                    {winner === 2 && <div className="text-2xl">🏆</div>}
+                  </CardContent>
+                </Card>
+              </>
+            )
+          })()}
         </div>
 
         <div className="text-center mt-6 text-sm text-muted-foreground">

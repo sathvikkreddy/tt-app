@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   const sql = await getSql()
   try {
     const body = await request.json()
-    const { type, player1, player2, player3, player4 } = body
+    const { type, player1, player2, player3, player4, points_to_win = 11 } = body
 
     // Check if there's already an active match
     const existingMatch = await sql`
@@ -50,10 +50,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "All player names are required for doubles match" }, { status: 400 })
     }
 
+    if (![11, 21].includes(points_to_win)) {
+      return NextResponse.json({ error: "Points to win must be 11 or 21" }, { status: 400 })
+    }
+
     // Create new match
     const result = await sql`
-      INSERT INTO matches (type, player1, player2, player3, player4, score1, score2, is_active)
-      VALUES (${type}, ${player1}, ${player2}, ${player3 || null}, ${player4 || null}, 0, 0, true)
+      INSERT INTO matches (type, player1, player2, player3, player4, score1, score2, points_to_win, is_active)
+      VALUES (${type}, ${player1}, ${player2}, ${player3 || null}, ${player4 || null}, 0, 0, ${points_to_win}, true)
       RETURNING *
     `
 
